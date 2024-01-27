@@ -1,0 +1,14 @@
+MANIFEST.in
+README.md
+setup.py
+CNCScalculator/__init__.py
+CNCScalculator/CNCScalculator.py
+CNCScalculator.egg-info/PKG-INFO
+CNCScalculator.egg-info/SOURCES.txt
+CNCScalculator.egg-info/dependency_links.txt
+CNCScalculator.egg-info/requires.txt
+CNCScalculator.egg-info/top_level.txt
+CNCScalculator/data/TCGA_match_GRCh37.cds
+CNCScalculator/data/genetic_code.txt
+CNCScalculator/data/human_TCGA_match_GRCh37.fas
+CNCScalculator/data/pancancer_mutation_rate.txt
