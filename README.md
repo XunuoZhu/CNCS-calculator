@@ -45,16 +45,16 @@ print(help(cncs))
 print(help(H_test))
 print(help(two_component_cncs))
 ## CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out_two_component_cncs:str,out_H_test:str)
-CNCSPipe("mutation_data.maf",1.51,"cncs.txt","TMM_gene.txt","TMM_site.txt","two_compo_cncs.txt","H_test.txt")
+CNCSPipe("mc3.v0.2.8.PUBLIC_filter_PASS.maf",1.51,"cncs.txt","TMM_gene.txt","TMM_site.txt","two_compo_cncs.txt","H_test.txt")
 
 ## cncs(mut_file:str,outputfile:str,arg:list = [])
-cncs("mutation_data.maf","cncs.txt")
+cncs("mc3.v0.2.8.PUBLIC_filter_PASS.maf","cncs.txt")
 
 ## H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str)
-H_test("mutation_data.maf",1.51,"cncs.txt","H_test.txt")
+H_test("mc3.v0.2.8.PUBLIC_filter_PASS.maf",1.51,"cncs.txt","H_test.txt")
 
 ## two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_cncs:str)
-two_component_cncs("mutation_data.maf",1.51,"cncs.txt","two_compo_cncs.txt")
+two_component_cncs("mc3.v0.2.8.PUBLIC_filter_PASS.maf",1.51,"cncs.txt","two_compo_cncs.txt")
 ```
 
 ## Input File
@@ -164,3 +164,5 @@ CNCScalculator-2.0
 **pancancer_mutation_rate.txt**	          Pancancer_rate of Ref mutate to Alt	
 
 **TCGA_match_GRCh37.cds**	                cds information of genes
+
+**mc3.v0.2.8.PUBLIC_filter_PASS.maf**      filtered mutation data of TCGA MC3 project

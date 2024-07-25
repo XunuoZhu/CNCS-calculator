@@ -9,6 +9,6 @@ from scipy import stats
 from progressbar import ProgressBar,ETA,Bar,Percentage
 from sys import exit
 import copy
-from .candris import open_file,count_mutation,prepare_fas_cds_file,cncs,candris,H_test,two_component_cncs
+from .CNCScalculator import open_file,count_mutation,prepare_fas_cds_file,cncs,CNCSPipe,H_test,two_component_cncs
 from pkg_resources import resource_filename as data_path
-__all__ = ["candris"]
+__all__ = ["CNCSPipe"]

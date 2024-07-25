@@ -9,6 +9,7 @@ from scipy.special import gamma as ga
 from progressbar import ProgressBar,ETA,Bar,Percentage
 from sys import exit
 from pkg_resources import resource_filename as data_path
+import pandas as pd
 from numpy import array
 import copy
 
@@ -24,7 +25,7 @@ def open_file(file:str,mode:str = 'r'):
     except:
         exit("Can't open file: %s ."%file)
     
-def count_mutation(mut_file:str,Nonsynonymous_site_with_mutation_initial:dict,Mut_missense_initial:dict,Mut_silent_initial:dict):
+def count_mutation(mut_file:str,Nonsynonymous_site_with_mutation_initial:dict,Synonymous_site_with_mutation_initial:dict,Mut_missense_initial:dict,Mut_silent_initial:dict):
     '''
     mut_file:dir of mutation file\n
     Nonsynonymous_site_with_mutation_initial:dict of initial nonsynonymous site with mutation, key is enst, value is zero\n
@@ -32,63 +33,62 @@ def count_mutation(mut_file:str,Nonsynonymous_site_with_mutation_initial:dict,Mu
     Mut_silent_initial:dict of initial silent mutation, key is enst, value is zero\n
     Count the number of non-synonymous, synonymous and nonsense mutations for each gene
     '''
-    MUT = open_file(mut_file)
-    head_mut = MUT.readline().strip('\n').split('\t')
+    MUT = pd.read_csv(mut_file,sep='\t',header=0)
     Aa_mut_count = {}
-    Nucl_mut_count = {}
-    nucl_mut = []
+    Nucl_mis_mut_count = {}
+    Nucl_syn_mut_count = {}
     Nonsynonymous_site_with_mutation = copy.deepcopy(Nonsynonymous_site_with_mutation_initial)
+    Synonymous_site_with_mutation = copy.deepcopy(Synonymous_site_with_mutation_initial)
     Mut_missense = copy.deepcopy(Mut_missense_initial)
     Mut_silent = copy.deepcopy(Mut_silent_initial)
-    if 'Hugo_Symbol' in head_mut:
-        for k in range(len(head_mut)):
-            if match(r'\bConsequence\b',head_mut[k]):
-                mut_type_pos = k
-            elif match(r'\bVariant_Type\b',head_mut[k]):
-                var_type_pos = k
-            elif match(r'\bHGVSp_Short\b',head_mut[k]):
-                aa_mut_pos = k
-            elif match(r'\bGene\b',head_mut[k]):
-                ensg_pos = k
-            elif match(r'\bFeature\b',head_mut[k]):
-                enst_pos = k
-            elif match(r'\bHGVSc\b',head_mut[k]):
-                nucl_mut_pos = k
-        
-        while True:
-            line = MUT.readline()
-            if line == '':break
-            line = line.strip('\n').strip('\r')
-            record = line.split('\t')
-            enst = record[enst_pos]
-            mutation_type = record[mut_type_pos]
-            var_type = record[var_type_pos]
-
+    # use package 'pandas to realize the function of count_mutation'
+    if 'Hugo_Symbol' in MUT.columns:
+        mut_type_pos = MUT.columns.get_loc('Consequence')
+        var_type_pos = MUT.columns.get_loc('Variant_Type')
+        aa_mut_pos = MUT.columns.get_loc('HGVSp_Short')
+        ensg_pos = MUT.columns.get_loc('Gene')
+        enst_pos = MUT.columns.get_loc('Feature')
+        nucl_mut_pos = MUT.columns.get_loc('HGVSc')
+        for index in MUT.index:
+            mutation_type = MUT.iloc[index,mut_type_pos]
+            var_type = MUT.iloc[index,var_type_pos]
             if (mutation_type == 'missense_variant') and (var_type == 'SNP'):
+                enst = MUT.iloc[index,enst_pos]
                 try:
                     Mut_missense[enst] += 1
                 except KeyError:
                     continue
-                pro_mut = record[aa_mut_pos].split('.')[1]
-                id = '\t'.join([record[ensg_pos],record[enst_pos],pro_mut])
+                pro_mut = MUT.iloc[index,aa_mut_pos].split('.')[1]
+                id = '\t'.join([MUT.iloc[index,ensg_pos],enst,pro_mut])
                 Aa_mut_count[id] = Aa_mut_count.get(id,0) + 1
-                nucl_mut_type = record[nucl_mut_pos]
+                nucl_mut_type = MUT.iloc[index,nucl_mut_pos]
                 if findall(r'c.(\d+)[A-Z]',nucl_mut_type):
                     nucl_pos = findall(r'c.(\d+)[A-Z]',nucl_mut_type)[0]
                 nucl_mut = enst + ':' + nucl_pos
-                if nucl_mut in Nucl_mut_count.keys():
-                    Nucl_mut_count[nucl_mut] += 1
+                if nucl_mut in Nucl_mis_mut_count.keys():
+                    Nucl_mis_mut_count[nucl_mut] += 1
                 else:
-                    Nucl_mut_count[nucl_mut] = 1
+                    Nucl_mis_mut_count[nucl_mut] = 1
                     Nonsynonymous_site_with_mutation[enst] += 1
             elif mutation_type == 'synonymous_variant':
+                enst = MUT.iloc[index,enst_pos]
                 try:
                     Mut_silent[enst] += 1
                 except KeyError:
                     continue
-    MUT.close()
+                nucl_mut_type = MUT.iloc[index,nucl_mut_pos]
+                if findall(r'c.(\d+)[A-Z]',nucl_mut_type):
+                    nucl_pos = findall(r'c.(\d+)[A-Z]',nucl_mut_type)[0]
+                nucl_mut = enst + ':' + nucl_pos
+                if nucl_mut in Nucl_syn_mut_count.keys():
+                    Nucl_syn_mut_count[nucl_mut] += 1
+                else:
+                    Nucl_syn_mut_count[nucl_mut] = 1
+                    Synonymous_site_with_mutation[enst] += 1
+
+    del MUT
     print("Count the number of somatic mutations for each gene! File name: %s\n"%mut_file)
-    return Aa_mut_count,Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent
+    return Aa_mut_count,Nonsynonymous_site_with_mutation,Synonymous_site_with_mutation,Mut_missense,Mut_silent
 
 def prepare_fas_cds_file(cds_file = None ,fas_file = None):
     '''
@@ -98,7 +98,7 @@ def prepare_fas_cds_file(cds_file = None ,fas_file = None):
     '''
     ## Load cds file.
     if cds_file is None:
-        CDS = open_file(data_path('CNCScalculator.CNCScalculator','data/TCGA_ICGC_match_GRCh37.cds'))
+        CDS = open_file(data_path('CNCScalculator.CNCScalculator','data/TCGA_match_GRCh37.cds'))
     else:
         CDS = open_file(cds_file)
 
@@ -109,6 +109,7 @@ def prepare_fas_cds_file(cds_file = None ,fas_file = None):
     Non_synonymous = {}
     Mut_missense_initial = {} ; Mut_silent_initial = {}
     Nonsynonymous_site_with_mutation_initial = {}
+    Synonymous_site_with_mutation_initial = {}
     for line in CDS.readlines():
         line = line.strip('\n').strip('\r')
         cds = line.split('\t')
@@ -116,7 +117,8 @@ def prepare_fas_cds_file(cds_file = None ,fas_file = None):
         Gene_id[cds[1]] = '\t'.join(cds[0:4])
         if cds[1] not in Synonymous.keys():
             Synonymous[cds[1]] = 0 ; Non_synonymous[cds[1]] = 0
-            Mut_missense_initial[cds[1]] = 0 ; Mut_silent_initial[cds[1]] = 0 ; Nonsynonymous_site_with_mutation_initial[cds[1]] = 0
+            Mut_missense_initial[cds[1]] = 0 ; Mut_silent_initial[cds[1]] = 0
+            Nonsynonymous_site_with_mutation_initial[cds[1]] = 0 ; Synonymous_site_with_mutation_initial[cds[1]] = 0
     CDS.close()
     print("Load cds file successfully!\n")
 
@@ -153,7 +155,7 @@ def prepare_fas_cds_file(cds_file = None ,fas_file = None):
     # Load fasta file.
     print("START READING FAS FILE..")
     if fas_file is None:
-        FAS = open_file(data_path('CNCScalculator.CNCScalculator',"data/human_TCGA_ICGC_match_GRCh37.fas"))
+        FAS = open_file(data_path('CNCScalculator.CNCScalculator',"data/human_TCGA_match_GRCh37.fas"))
     else:
         FAS = open_file(fas_file)
     
@@ -217,7 +219,7 @@ def prepare_fas_cds_file(cds_file = None ,fas_file = None):
     FAS.close()
     print("Load gene sequence!")
     print("Calculate non-synonymous and synonymous sites!")
-    return Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial
+    return Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial
 
 def cncs(mut_file:str,outputfile:str,fas_cds:list=[],cds_file = None, fas_file = None):
     '''
@@ -231,24 +233,25 @@ def cncs(mut_file:str,outputfile:str,fas_cds:list=[],cds_file = None, fas_file =
     Print result to a file. And return a dic whose keys is enst id and values is CN/CS.
     '''
     if fas_cds == []:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file,fas_file)
+        Gene_id,Aa_length,Gene_name,L_S,L_N,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file,fas_file)
     else:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
+        Gene_id,Aa_length,Gene_name,L_S,L_N,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
 
     # Count the number of non-synonymous, synonymous and nonsense mutations for each gene
-    Aa_mut_count,Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent = count_mutation(mut_file,Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial)
+    Aa_mut_count,S_N,S_S,Mut_N,Mut_S = count_mutation(mut_file,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial)
 
     OUT = open_file(outputfile,mode='w')
-    OUT.write("Gene_id\tnonsynonymous_site\tsynonymous_site\tnonsynonymous_count\tsynonymous_count\tnonsynonymous_site_with_mutation\tCN\tCS\tCN/CS\tp_value\n")
+    OUT.write("Gene_id\tnonsynonymous_site\tsynonymous_site\tnonsynonymous_count\tsynonymous_count\tnonsynonymous_site_with_mutation\tsynonymous_site_with_mutation\tCN\tCS\tCN/CS\tp_value\n")
     Cncs = {}
     Cncs_p = {}
     for enst in Gene_name.keys():
         gene_name = Gene_name[enst]
-        nonsynonymous_site = Non_synonymous[enst]
-        synonymous_site = Synonymous[enst]
-        nonsynonymous_count = Mut_missense[enst]
-        synonymous_count = Mut_silent[enst]
-        nonsynonymou_site_with_mutation = Nonsynonymous_site_with_mutation[enst]
+        nonsynonymous_site = L_N[enst]
+        synonymous_site = L_S[enst]
+        nonsynonymous_count = Mut_N[enst]
+        synonymous_count = Mut_S[enst]
+        nonsynonymou_site_with_mutation = S_N[enst]
+        synonymous_site_with_mutation = S_S[enst]
         ## chi2_contingency
         try :
             chi2_con_array = array([[nonsynonymous_site,synonymous_site],[nonsynonymous_count,synonymous_count]])
@@ -271,11 +274,11 @@ def cncs(mut_file:str,outputfile:str,fas_cds:list=[],cds_file = None, fas_file =
         Cncs_p[enst] = p_value
         nonsynonymous_site = "{:.2f}".format(nonsynonymous_site)
         synonymous_site = "{:.2f}".format(synonymous_site)
-        temp = '\t'.join(map(str,[gene_name,nonsynonymous_site,synonymous_site,nonsynonymous_count,synonymous_count,nonsynonymou_site_with_mutation,cn,cs,cn_cs,p_value])) + '\n'
+        temp = '\t'.join(map(str,[gene_name,nonsynonymous_site,synonymous_site,nonsynonymous_count,synonymous_count,nonsynonymou_site_with_mutation,synonymous_site_with_mutation,cn,cs,cn_cs,p_value])) + '\n'
         OUT.write(temp)
     OUT.close()
     print("Finish calculate CN/CS for each gene and print result!")
-    return Cncs,Cncs_p, Aa_mut_count,Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent
+    return Cncs,Cncs_p,Aa_mut_count,L_N,L_S,S_N,S_S,Mut_N,Mut_S
 
 def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out_two_component_cncs:str,out_H_test:str,fas_cds:list=[],cds_file = None, fas_file = None):
     '''
@@ -285,7 +288,7 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
     out_cncs:file dir.write cncs result to it\n
     out_gene:file dir.write gene with at least a driver site\n
     out_site:file dir.write driver site\n
-    out_two_component_cncs:file dir.write cncs ratio of passenger sites or driver sites\n
+    out_two_component_cncs:file dir.write cncs ratio of passenger sites and driver sites\n
     out_H_test:file dir.write H_test result to it.\n
     fas_cds: the output of prepare_fas_cds_file function\n
     cds_file: cds file path, if fas_cds is not empty list, this parameter will be ignored\n
@@ -311,22 +314,22 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
         return float(2*(fun_two-fun_single))
 
     if fas_cds == []:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
     else:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
     
     print("START CAL CNCS.")
-    Cncs,Cncs_p,Aa_mut_count, Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
+    Cncs,Cncs_p,Aa_mut_count,L_N,L_S,S_N,S_S,Mut_N,Mut_S = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
     print("FINISHED CNCS CAL")
 
     OUT1 = open_file(out_gene,mode='w')
     OUT2 = open_file(out_site,mode='w')
     OUT3 = open_file(out_two_component_cncs,mode='w')
     OUT4 = open_file(out_H_test,mode='w')
-    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tMax_hit\tCount\tProtein_length\tDistribution\tMut_sites\tf0\tmean\tvariance\tm0\tm1\teta\tLRT_p-value\tQ(z)\tCN/CS\tCN/CS_p_value\tH_test\n")
+    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tMax_hit\tCount\tProtein_length\tDistribution\tMut_sites\tf0\tmean\tvariance\tm0\tm1\teta\tLRT_p-value\tQ(z)\n")
     OUT2.write("Gene_id\tTranscript_id\tGene_name\tChr\tProtein_position\tz\tQ(z)\tProtein_mutation\tM(z)\tOmega(z)\n")
     OUT3.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmega1\tOmega0\tOmega0_p\n")
-    OUT4.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\tH_value\tH_test\n")
+    OUT4.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tH_test\tHtest_p_value\n")
 
     Count = dict()
     Site_mut = []
@@ -334,6 +337,9 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
     Max = dict()
     Hit = dict()
 
+    Omega0 = {}
+    Omega1 = {}
+    Omega0_p = {}
     ## Read mutation records
     for key in Aa_mut_count.keys():
         mut = key.split('\t')
@@ -416,12 +422,10 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                 count_trim -= dis1
                 aa_trim -= 1
 
-        #q = [0] * len(dis_list)
         h,q,m = [0] * len(dis_list),[0] * len(dis_list),[0] * len(dis_list)
         Omega = [0] * len(dis_list)
         hit = 0
 
-        #calculate omega0 & p_value
         if isinstance(aa,int):
             mean = count_trim / aa_trim
             num = len(dis_list) 
@@ -443,28 +447,48 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                 eta = (mean - m0) / (m1 - m0)
                 if m1 < 0 or eta < 0 or eta > 1:
                     continue
+
+                ################################################
+                # Calculate omega0 & omega1
                 omega = Cncs[gene]
                 omega_p = Cncs_p[gene]
-                omega0 = (m0/mean)*omega
-                omega1 = (m1/mean)*omega
-                ## chi2_contingency_omega0
-                nonsynonymous_site = Non_synonymous[gene]
-                synonymous_site = Synonymous[gene]
-                nonsynonymous_count = Mut_missense[gene]
-                synonymous_count = Mut_silent[gene]
-                nonsynonymou_site_with_mutation = Nonsynonymous_site_with_mutation[gene]
-                try :
-                    nonsynonymous_site_omega0 = nonsynonymous_site - nonsynonymous_count                                       
-                    synonymous_site_omega0 = synonymous_site - synonymous_count
-                    chi2_con_array_omega0 = array([[nonsynonymous_count,nonsynonymous_site_omega0], [synonymous_count, synonymous_site_omega0]])
+                # parameters for omega0 and omega1
+                mut_n,mut_s,ln,ls,sn,ss = Mut_N[gene],Mut_S[gene],L_N[gene],L_S[gene],S_N[gene],S_S[gene]
+
+                # calculate omega0 (SN/SS)/(LN/LS)
+                if ls == 0 or ln == 0:
+                    omega0 = 'NA'
+                elif ss == 0:
+                    omega0 = (sn/ln)/((ss+0.5)/(ls+0.5))
+                else:
+                    omega0 = (sn/ln)/(ss/ls)
+                # calculate omega0_p
+                try:
+                    chi2_con_array_omega0 = array([[ln,ls], [sn, ss]])
                     chi2_value_omega0, p_value_omega0, df_omega0, expected_omega0 = chi2_contingency(chi2_con_array_omega0)
                 except:
-                    p_value_omega0='NA'
+                    p_value_omega0 = 'NA'
+                # store
+                Omega0[gene] = omega0
+                Omega0_p[gene] = p_value_omega0
 
-                temp_omega0 = [id,omega,omega_p,omega1,omega0,p_value_omega0]
-                s_omega0 = '\t'.join(list(map(str,temp_omega0))) + '\n'
-                OUT3.write(s_omega0)
+                # calculate omega1
+                try:
+                    omega1_numerator = ((mut_n/mut_s) - (1-eta) * (sn/ss))/eta
+                    omega1 = omega1_numerator / (ln/ls)
+                    if omega1 < 0:
+                        omega1 = 'NA'
+                except ZeroDivisionError:
+                    omega1 = 'NA'
+                # store
+                Omega1[gene] = omega1
 
+                if (omega0 != 'NA') and (omega1 != 'NA'):
+                    temp_two_comp = [id,omega,omega_p,omega1,omega0,p_value_omega0]
+                    s_two_comp = '\t'.join(list(map(str,temp_two_comp))) + '\n'
+                    OUT3.write(s_two_comp)
+                    
+                ################################################
                 #H test
                 H = (var - mean) / (var + mean * (mean - 1))
                 H0=1-H
@@ -474,10 +498,28 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                     H_test = '1-H<cncs<1'
                 else:
                     H_test = '1<cncs'
-                temp_H = [id,omega,H,H_test]
+                # statistical test for H
+                try:
+                    chi2_con_array_H = array([[mut_n,mut_s], [ln*(1-H), ls]])
+                    chi2_value_H, Htest_p_value, df_H, expected_H = chi2_contingency(chi2_con_array_H)
+                except:
+                    Htest_p_value = 'NA'
+                # mut_n_hat = (mut_n + mut_s) * ((ln*(1-H))/(ls+ln*(1-H)))
+                # mut_s_hat = (mut_n + mut_s) * (ls/(ls+ln*(1-H)))
+                # ln0_hat = ln - mut_n_hat
+                # ls0_hat = ls - mut_s_hat
+                # ln0 = ln - mut_n
+                # ls0 = ls - mut_s
+                # # caculate chi-square value
+                # Htest_chi_square = ((mut_n - mut_n_hat) ** 2 / mut_n_hat) + ((mut_s - mut_s_hat) ** 2 / mut_s_hat) + ((ln0 - ln0_hat) ** 2 / ln0_hat) + ((ls0 - ls0_hat) ** 2 / ls0_hat)
+                # Htest_p_value = chi2.sf(Htest_chi_square,3)
+                
+                temp_H = [id,omega,H0,H_test,Htest_p_value]
                 s_H = '\t'.join(list(map(str,temp_H)))+'\n'
                 OUT4.write(s_H)
 
+            ################################################
+            # candris site & gene calculation for gene that has at least one site with mutation for three or more times
             if maxhit > 2:
                 qz = ''
                 lrt = LRT(maxhit,eta,m1,m0,mean)
@@ -488,13 +530,19 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                     z = 50 if int(dis1) > 50 else int(dis1)
                     if alpha == 'inf':
                         ratio = log(eta/(1-eta)) + z*log(m1/m0)-(m1-m0)
-                        q[i] = 1 - 1/float(1+dec(e)**dec(ratio)) 
-                        Omega[i] = (1-q[i])*omega0+q[i]*omega1
+                        q[i] = 1 - 1/float(1+dec(e)**dec(ratio))
+                        try:
+                            Omega[i] = (1-q[i])*omega0+q[i]*omega1
+                        except TypeError:
+                            Omega[i] = 'NA'
                     else:
                         h[i] = (gamma(z+alpha-1)/gamma(alpha-1)) * e**(z*(log(m1)-log(m0))+alpha*log(alpha)+m0-(z+alpha)*log(m1+alpha))
                         q[i] = eta * h[i]/(1+eta*(h[i]-1))
                         m[i] = (1-q[i])*m0+q[i]*((z+alpha)/(m1+alpha))*m1
-                        Omega[i] = (1-q[i])*omega0 + q[i]*((z+alpha)/(m1+alpha))*omega1
+                        try:
+                            Omega[i] = (1-q[i])*omega0 + q[i]*((z+alpha)/(m1+alpha))*omega1
+                        except TypeError:
+                            Omega[i] = 'NA'
                     site_mut = gene + ':' + pos
                     OUT2.write('\t'.join([id,pos,dis1,str(q[i]),Site_mut_list[site_mut],str(m[i]),str(Omega[i])]) + '\n')
 
@@ -524,7 +572,7 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                     q0 = eta*h0/(1+eta*(h0-1))
 
                 qz += str(q0) + ":0:" + str(nohit) + ';'          
-                temp_can = [id,maxhit,count_int,aa,dis,num,f0,mean,var,m0,m1,eta,p,qz,omega,omega_p,H_test]
+                temp_can = [id,maxhit,count_int,aa,dis,num,f0,mean,var,m0,m1,eta,p,qz]
                 s_can = '\t'.join(list(map(str,temp_can))) + '\n'
                 OUT1.write(s_can)
     print("Finish calculate paramates!")
@@ -544,18 +592,17 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
     cds_file: cds file path, if fas_cds is not empty list, this parameter will be ignored\n
     fas_file: fasta file path, if fas_cds is not empty list, this parameter will be ignored\n
     '''
-
     if fas_cds == []:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
     else:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
     
     print("START CAL CNCS.")
-    Cncs,Cncs_p,Aa_mut_count, Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
+    Cncs,Cncs_p,Aa_mut_count,L_N,L_S,S_N,S_S,Mut_N,Mut_S = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
     print("FINISHED CNCS CAL")
 
     OUT1 = open_file(out_H_test,mode='w')
-    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\tH_value\tH_test\n")
+    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tH_test\tHtest_p_value\n")
 
     Count = dict()
     Site_mut = []
@@ -597,6 +644,7 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
         for aa_mut , _ in sorted(mut_count.items(),key=lambda x: x[1],reverse=True):
             Site_mut_list[site_mut] += aa_mut + ':' + mut_count[aa_mut] + ';'
 
+
     gene_list = []
     ## Mutation profile for each gene
     for site_mut in Site_mut:
@@ -612,6 +660,7 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
             Hit[gene] += str(Count[site_mut]) + ':' +pos + ';'
             if (Count[site_mut] > Max[gene]) : Max[gene] = Count[site_mut] 
     print("Count the mutation profile for each gene!")
+    
     
     # sort mutation distribution
     for gene in gene_list:
@@ -643,7 +692,10 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
                 count_trim -= dis1
                 aa_trim -= 1
 
-        #calculate omega0 & p_value
+        h,q,m = [0] * len(dis_list),[0] * len(dis_list),[0] * len(dis_list)
+        Omega = [0] * len(dis_list)
+        hit = 0
+
         if isinstance(aa,int):
             mean = count_trim / aa_trim
             num = len(dis_list) 
@@ -665,9 +717,11 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
                 eta = (mean - m0) / (m1 - m0)
                 if m1 < 0 or eta < 0 or eta > 1:
                     continue
-                omega = Cncs[gene]
 
-                #H test
+                # used parameters
+                omega = Cncs[gene]
+                mut_n,mut_s,ln,ls,sn,ss = Mut_N[gene],Mut_S[gene],L_N[gene],L_S[gene],S_N[gene],S_S[gene]
+                # Htest
                 H = (var - mean) / (var + mean * (mean - 1))
                 H0=1-H
                 if omega<H0:
@@ -676,7 +730,18 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
                     H_test = '1-H<cncs<1'
                 else:
                     H_test = '1<cncs'
-                temp_H = [id,omega,H,H_test]
+                # statistical test for H
+                mut_n_hat = (mut_n + mut_s) * ((ln*(1-H))/(ls+ln*(1-H)))
+                mut_s_hat = (mut_n + mut_s) * (ls/(ls+ln*(1-H)))
+                ln0_hat = ln - mut_n_hat
+                ls0_hat = ls - mut_s_hat
+                ln0 = ln - mut_n
+                ls0 = ls - mut_s
+                # caculate chi-square value
+                Htest_chi_square = ((mut_n - mut_n_hat) ** 2 / mut_n_hat) + ((mut_s - mut_s_hat) ** 2 / mut_s_hat) + ((ln0 - ln0_hat) ** 2 / ln0_hat) + ((ls0 - ls0_hat) ** 2 / ls0_hat)
+                Htest_p_value = chi2.sf(Htest_chi_square,3)
+                
+                temp_H = [id,omega,H0,H_test,Htest_p_value]
                 s_H = '\t'.join(list(map(str,temp_H)))+'\n'
                 OUT1.write(s_H)
     print("Finish calculate paramates!")
@@ -688,19 +753,18 @@ def two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_c
     mut_file:input\n
     alpha:flaot or you can set it as inf\n
     out_cncs:file dir.write cncs result to it\n
-    out_two_component_cncs:file dir.write cncs ratio of passenger sites or driver sites\n
+    out_two_component_cncs:file dir.write cncs ratio of passenger sites and driver sites\n
     fas_cds:the output of prepare_fas_cds_file function\n
     cds_file: cds file path, if fas_cds is not empty list, this parameter will be ignored\n
     fas_file: fasta file path, if fas_cds is not empty list, this parameter will be ignored\n
     '''
-
     if fas_cds == []:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = prepare_fas_cds_file(cds_file, fas_file)
     else:
-        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous, Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
+        Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial = fas_cds
     
     print("START CAL CNCS.")
-    Cncs,Cncs_p,Aa_mut_count, Nonsynonymous_site_with_mutation,Mut_missense,Mut_silent = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
+    Cncs,Cncs_p,Aa_mut_count,L_N,L_S,S_N,S_S,Mut_N,Mut_S = cncs(mut_file,out_cncs,fas_cds = [Gene_id,Aa_length,Gene_name,Synonymous,Non_synonymous,Nonsynonymous_site_with_mutation_initial,Synonymous_site_with_mutation_initial,Mut_missense_initial,Mut_silent_initial])
     print("FINISHED CNCS CAL")
 
     OUT1 = open_file(out_two_component_cncs,mode='w')
@@ -712,6 +776,9 @@ def two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_c
     Max = dict()
     Hit = dict()
 
+    Omega0 = {}
+    Omega1 = {}
+    Omega0_p = {}
     ## Read mutation records
     for key in Aa_mut_count.keys():
         mut = key.split('\t')
@@ -794,7 +861,10 @@ def two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_c
                 count_trim -= dis1
                 aa_trim -= 1
 
-        #calculate omega0 & p_value
+        h,q,m = [0] * len(dis_list),[0] * len(dis_list),[0] * len(dis_list)
+        Omega = [0] * len(dis_list)
+        hit = 0
+
         if isinstance(aa,int):
             mean = count_trim / aa_trim
             num = len(dis_list) 
@@ -816,26 +886,43 @@ def two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_c
                 eta = (mean - m0) / (m1 - m0)
                 if m1 < 0 or eta < 0 or eta > 1:
                     continue
+
+                ################################################
+                # Calculate omega0 & omega1
                 omega = Cncs[gene]
                 omega_p = Cncs_p[gene]
-                omega0 = (m0/mean)*omega
-                omega1 = (m1/mean)*omega
-                ## chi2_contingency_omega0
-                nonsynonymous_site = Non_synonymous[gene]
-                synonymous_site = Synonymous[gene]
-                nonsynonymous_count = Mut_missense[gene]
-                synonymous_count = Mut_silent[gene]
-                nonsynonymou_site_with_mutation = Nonsynonymous_site_with_mutation[gene]
-                try :
-                    nonsynonymous_site_omega0 = nonsynonymous_site - nonsynonymous_count                                       
-                    synonymous_site_omega0 = synonymous_site - synonymous_count
-                    chi2_con_array_omega0 = array([[nonsynonymous_count,nonsynonymous_site_omega0], [synonymous_count, synonymous_site_omega0]])
+                # parameters for omega0 and omega1
+                mut_n,mut_s,ln,ls,sn,ss = Mut_N[gene],Mut_S[gene],L_N[gene],L_S[gene],S_N[gene],S_S[gene]
+                
+                # calculate omega0 (SN/SS)/(LN/LS)
+                if ls == 0 or ln == 0:
+                    omega0 = 'NA'
+                elif ss == 0:
+                    omega0 = (sn/ln)/((ss+0.5)/(ls+0.5))
+                else:
+                    omega0 = (sn/ln)/(ss/ls)
+                # calculate omega0_p
+                try:
+                    chi2_con_array_omega0 = array([[ln,ls], [sn, ss]])
                     chi2_value_omega0, p_value_omega0, df_omega0, expected_omega0 = chi2_contingency(chi2_con_array_omega0)
                 except:
-                    p_value_omega0='NA'
+                    p_value_omega0 = 'NA'
+                # store
+                Omega0[gene] = omega0
+                Omega0_p[gene] = p_value_omega0
 
-                temp_omega0 = [id,omega,omega_p,omega1,omega0,p_value_omega0]
-                s_omega0 = '\t'.join(list(map(str,temp_omega0))) + '\n'
-                OUT1.write(s_omega0)
+                # calculate omega1
+                try:
+                    omega1_numerator = ((mut_n/mut_s) - (1-eta) * (sn/ss))/eta
+                    omega1 = omega1_numerator / (ln/ls)
+                except ZeroDivisionError:
+                    omega1 = 'NA'
+                # store
+                Omega1[gene] = omega1
+                
+                if (omega0 != 'NA') and (omega1 != 'NA'):
+                    temp_two_comp = [id,omega,omega_p,omega1,omega0,p_value_omega0]
+                    s_two_comp = '\t'.join(list(map(str,temp_two_comp))) + '\n'
+                    OUT1.write(s_two_comp)
     print("Finish calculate paramates!")
     OUT1.close()
