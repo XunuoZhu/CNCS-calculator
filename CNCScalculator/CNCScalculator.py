@@ -328,7 +328,7 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
     OUT4 = open_file(out_H_test,mode='w')
     OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tMax_hit\tCount\tProtein_length\tDistribution\tMut_sites\tf0\tmean\tvariance\tm0\tm1\teta\tLRT_p-value\tQ(z)\n")
     OUT2.write("Gene_id\tTranscript_id\tGene_name\tChr\tProtein_position\tz\tQ(z)\tProtein_mutation\tM(z)\tOmega(z)\n")
-    OUT3.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmega1\tOmega0\tOmega0_p\n")
+    OUT3.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmegadri\tOmegapass\tOmegapass_p\n")
     OUT4.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tH_test\tHtest_p_value\n")
 
     Count = dict()
@@ -768,7 +768,7 @@ def two_component_cncs(mut_file:str,alpha:float,out_cncs:str,out_two_component_c
     print("FINISHED CNCS CAL")
 
     OUT1 = open_file(out_two_component_cncs,mode='w')
-    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmega1\tOmega0\tOmega0_p\n")
+    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmegadri\tOmegapass\tOmegapass_p\n")
 
     Count = dict()
     Site_mut = []
