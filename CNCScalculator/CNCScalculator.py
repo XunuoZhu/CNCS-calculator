@@ -329,7 +329,7 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
     OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tMax_hit\tCount\tProtein_length\tDistribution\tMut_sites\tf0\tmean\tvariance\tm0\tm1\teta\tLRT_p-value\tQ(z)\n")
     OUT2.write("Gene_id\tTranscript_id\tGene_name\tChr\tProtein_position\tz\tQ(z)\tProtein_mutation\tM(z)\tOmega(z)\n")
     OUT3.write("Gene_id\tTranscript_id\tGene_name\tChr\tOmega\tOmega_p\tOmegadri\tOmegapass\tOmegapass_p\n")
-    OUT4.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tH_test\tHtest_p_value\n")
+    OUT4.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tHtest_p_value\n")
 
     Count = dict()
     Site_mut = []
@@ -492,12 +492,6 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                 #H test
                 H = (var - mean) / (var + mean * (mean - 1))
                 H0=1-H
-                if omega<H0:
-                    H_test='cncs<1-H'
-                elif H0<omega<1:
-                    H_test = '1-H<cncs<1'
-                else:
-                    H_test = '1<cncs'
                 # statistical test for H
                 try:
                     chi2_con_array_H = array([[mut_n,mut_s], [ln*(1-H), ls]])
@@ -513,8 +507,7 @@ def CNCSPipe(mut_file:str,alpha:float,out_cncs:str,out_gene:str,out_site:str,out
                 # # caculate chi-square value
                 # Htest_chi_square = ((mut_n - mut_n_hat) ** 2 / mut_n_hat) + ((mut_s - mut_s_hat) ** 2 / mut_s_hat) + ((ln0 - ln0_hat) ** 2 / ln0_hat) + ((ls0 - ls0_hat) ** 2 / ls0_hat)
                 # Htest_p_value = chi2.sf(Htest_chi_square,3)
-                
-                temp_H = [id,omega,H0,H_test,Htest_p_value]
+                temp_H = [id,omega,H0,Htest_p_value]
                 s_H = '\t'.join(list(map(str,temp_H)))+'\n'
                 OUT4.write(s_H)
 
@@ -602,7 +595,7 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
     print("FINISHED CNCS CAL")
 
     OUT1 = open_file(out_H_test,mode='w')
-    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tH_test\tHtest_p_value\n")
+    OUT1.write("Gene_id\tTranscript_id\tGene_name\tChr\tCN/CS\t1-H\tHtest_p_value\n")
 
     Count = dict()
     Site_mut = []
@@ -724,24 +717,14 @@ def H_test(mut_file:str,alpha:float,out_cncs:str,out_H_test:str,fas_cds:list=[],
                 # Htest
                 H = (var - mean) / (var + mean * (mean - 1))
                 H0=1-H
-                if omega<H0:
-                    H_test='cncs<1-H'
-                elif H0<omega<1:
-                    H_test = '1-H<cncs<1'
-                else:
-                    H_test = '1<cncs'
                 # statistical test for H
-                mut_n_hat = (mut_n + mut_s) * ((ln*(1-H))/(ls+ln*(1-H)))
-                mut_s_hat = (mut_n + mut_s) * (ls/(ls+ln*(1-H)))
-                ln0_hat = ln - mut_n_hat
-                ls0_hat = ls - mut_s_hat
-                ln0 = ln - mut_n
-                ls0 = ls - mut_s
-                # caculate chi-square value
-                Htest_chi_square = ((mut_n - mut_n_hat) ** 2 / mut_n_hat) + ((mut_s - mut_s_hat) ** 2 / mut_s_hat) + ((ln0 - ln0_hat) ** 2 / ln0_hat) + ((ls0 - ls0_hat) ** 2 / ls0_hat)
-                Htest_p_value = chi2.sf(Htest_chi_square,3)
+                try:
+                    chi2_con_array_H = array([[mut_n,mut_s], [ln*(1-H), ls]])
+                    chi2_value_H, Htest_p_value, df_H, expected_H = chi2_contingency(chi2_con_array_H)
+                except:
+                    Htest_p_value = 'NA'
                 
-                temp_H = [id,omega,H0,H_test,Htest_p_value]
+                temp_H = [id,omega,H0,Htest_p_value]
                 s_H = '\t'.join(list(map(str,temp_H)))+'\n'
                 OUT1.write(s_H)
     print("Finish calculate paramates!")
